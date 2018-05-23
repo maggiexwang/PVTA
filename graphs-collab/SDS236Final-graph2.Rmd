@@ -1,0 +1,64 @@
+---
+title: "SDS236Final"
+author: "Natalia Kreciglowa"
+date: "5/2/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Import:
+
+```{r, include=FALSE}
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Data Manipulation for second graph
+mithOutgoing <- read.csv(file = "SmithOutgoing.csv", header = TRUE, stringsAsFactors=FALSE)
+SmithIncoming <- read.csv(file = "SmithIncoming.csv", header = TRUE, stringsAsFactors=FALSE)
+FiveCollege <- read.csv(file = "FiveCollege.csv", header = TRUE, stringsAsFactors=FALSE)
+Enrollment <- read.csv(file = "Enrollment.csv", header = TRUE, stringsAsFactors=FALSE)
+
+FiveCollegeTest <- reshape(FiveCollege, varying = c( "Amherst", "Hampshire", "MHC", "Smith", "UMass"),
+                           v.names = "Count",
+                           timevar = "ReceivingInstitution",
+                           times = c( "Amherst", "Hampshire", "MHC", "Smith", "UMass"),
+                           direction = "long")
+FiveCollegeTest <- FiveCollegeTest %>%
+  mutate(Count = as.numeric(as.character(Count)))
+FiveCollegeTest <- na.omit(FiveCollegeTest)
+FiveCollegeTest <- FiveCollegeTest %>%
+  select("Year", "SendingInstitution", "ReceivingInstitution", "Count")
+write.csv(FiveCollegeTest, file = "FiveCollegeData.csv")
+
+FiveCollegeLine <- FiveCollegeTest %>%
+  group_by( SendingInstitution, Year) %>%
+  summarise( TotalSending = sum(Count))
+
+FiveCollegePop <- merge(FiveCollegeLine, Enrollment, by.x = c("SendingInstitution", "Year"), by.y = c("College", "Year"))
+
+FiveCollegePop <- FiveCollegePop %>%
+  mutate( SendingPercent = round( (TotalSending/Total) * 100, 2 ))
+```
+
+### PLOTS:
+```{r echo=FALSE}
+g <- ggplot(data = FiveCollegePop, aes(x = Year, y = SendingPercent, group = SendingInstitution)) +
+  geom_line(aes( color = SendingInstitution)) +
+  theme_minimal() +
+  labs(colour = "Five College Institution", title = "Five College Enrollment As Percent of Student Body", x = "School Year, Starting Fall 2013", y = "Five College Enrollment as % of Student Body") 
+
+p <- ggplotly(g)
+p
+```
+
+
+

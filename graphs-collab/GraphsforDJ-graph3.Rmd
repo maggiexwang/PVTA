@@ -1,0 +1,52 @@
+---
+title: "Untitled"
+author: "Margaret Perry"
+date: "5/2/2018"
+output: html_document
+---
+
+```{r}
+##install.packages("leaflet")
+##install.packages("shiny")
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+```
+
+```{r}
+B38 <- read_excel("5c-stop.xlsx")
+View(B38)
+B39 <- read_excel("B39.xlsx")
+View(B39)
+B43 <- read_excel("B43.xlsx")
+View(B43)
+```
+
+```{r}
+fd_B38=filter(B38, stop_name=="Haigis Mall"| stop_name=="Amherst College"| stop_name=="Hampshire Clg"|stop_name=="Carle Museum"| stop_name=="MHC Museum"| stop_name=="Sander's(I)"| stop_name=="Sander's(O)"| stop_name=="Dakin House (O)"| stop_name=="Dakin House (I)"| stop_name=="Blanchard Hall"| stop_name=="Mary Woolley"| stop_name=="Stone Shelter")
+
+fd_B39=filter(B39, stop_name=="Smith College" |stop_name=="Hampshire Clg"|stop_name=="Carle Museum"| stop_name=="MHC Museum"|  stop_name=="Sander's(I)"| stop_name=="Sander's(O)"| stop_name=="Dakin House (O)"| stop_name=="Dakin House (I)"| stop_name=="Blanchard Hall"| stop_name=="Mary Woolley"| stop_name=="Stone Shelter")
+
+fd_B43=filter(B43, stop_name=="Smith College"| stop_name=="Pray St (I)"|stop_name=="Haigis Mall"| stop_name=="Amherst College"| stop_name=="SW/Mass Ave (W)"|  stop_name=="Visitors Ctr")
+
+Busdata <- rbind(fd_B43,fd_B39,fd_B38)
+```
+
+```{r}
+pB38 <- ggplot(data= fd_B38,aes(alight,board,col=stop_name))+geom_jitter()+labs(x= "Exiting the Bus", y= "Entering the Bus", title= "Busline 38")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+
+pB39<- ggplot(data= fd_B39,aes(alight,board,col=stop_name))+geom_jitter()+labs(x= "Exiting the Bus", y= "Entering the Bus", title= "Busline 39")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+
+pB43<-ggplot(data= fd_B43,aes(alight,board, col=stop_name))+geom_jitter()+labs(x= "Exiting the Bus", y= "Entering the Bus", title= "Busline 43")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+```
+
+```{r}
+grid.arrange(pB43,pB38, arrangeGrob(pB39, ncol=1), heights= c(4/7, 5/7), ncol=2)
+ pB38
+ pB43
+ pB39
+```
+
+ 

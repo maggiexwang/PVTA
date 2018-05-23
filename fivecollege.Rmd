@@ -1,0 +1,189 @@
+---
+title: "On the Wrong Side of the River?"
+subtitle: "An Analysis of Smith College and the Five College Consortium"
+author: "Natalia Kreciglowa, Margaret Perry, Maggie Wang"
+output: 
+  html_document:
+    theme: simplex
+---
+
+`r format(Sys.Date(), "%B %e, %Y")`
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(rgdal)
+library(tidyverse)
+library(leaflet)
+library(rmapshaper)
+library(leaflet.minicharts)
+library(gridExtra)
+library(plotly)
+library(raster)
+library(readxl)
+```
+
+For Smith College, the [Five College Consortium](https://www.fivecolleges.edu/) is a big sell to prospective students: what this small liberal arts institution lacks in size, it makes up with a network of over 30,000 undergraduate students in UMass Amherst, Amherst College, Mount Holyoke College, and Hampshire College, along with free bus service between the colleges that comes with a Five College student ID. The Consortium website proudly advertises this free service run by the PVTA as a way to incentivize students into participating in the Five College community and into taking courses off-campus. Yet this mode of transit has its drawbacks: scheduling inconveniences and long commutes, issues that are especially present for buses connecting Smith to the other four campuses across the Connecticut River. A comparison between the mobility among different colleges reveals that while these inconveniences are not disabling to connectivity between the institutions, they can cause time management difficulties for students when it comes to planning for off-campus classes and other activities.
+
+Cross-registration is a popular way in which students in the Consortium interact with one another. Below is a visualization of yearly Five-College cross-registration numbers as well as the [Pioneer Valley Transit Authority (PVTA)](http://www.pvta.com/index.php) bus routes within the Five College Consortium. The pie charts placed on each of the campuses represent the incoming students from the other colleges, and the school the students come from. The size of each of the circles symbolize the total number of incoming students, with UMass having the consistently largest total number of incoming students. Interact with the graphic to see change over time, from 2012-2013 academic year to 2016-2017, or automate the graphic to play a timeline of the changes.
+
+
+```{r results='hide', message=FALSE, warning=FALSE, include=FALSE}
+# Read in pvta data and simplify for leaflet
+pvta_routes <- readOGR(dsn = ".//PVTA_Routes", layer = "PVTA_Routes", stringsAsFactors = "FALSE")
+pvta_routes_smp <- rmapshaper::ms_simplify(pvta_routes)
+```
+
+```{r include=FALSE}
+# Get college coordinates and colors
+coords_colors <- read.csv(textConnection("ReceivingInstitution,lat,long,color
+Amherst,42.3709,-72.5170,darkorchid
+Hampshire,42.3256,-72.5323,orange
+MHC,42.2533,-72.5761,cornflowerblue
+UMass,42.3912,-72.5267,maroon
+Smith,42.3181,-72.6372,blue"))
+```
+
+```{r include=FALSE}
+# Read in cross-registration numbers
+crossreg <- read.csv("FiveCollegeData.csv")
+  
+# Join with coords_colors: tidy set
+fivecollege_tidy <- crossreg %>% 
+  left_join(coords_colors, by = "ReceivingInstitution")
+
+# Join with coords_colors: graph/untidy
+fivecollege_graph <- fivecollege_tidy %>% 
+  spread(key = SendingInstitution, 
+         value = Count, fill = NA) %>% 
+  mutate(Amherst = as.numeric(Amherst), 
+         Hampshire = as.numeric(Hampshire), 
+         MHC = as.numeric(MHC), 
+         Smith = as.numeric(Smith),
+         UMass = as.numeric(UMass))
+fivecollege_graph$total <- rowSums(fivecollege_graph[,6:10], na.rm = TRUE)
+```
+
+```{r include=FALSE}
+# Create basemap for the first graph
+basemap <- leaflet() %>% 
+  addProviderTiles("Stamen.Toner") %>% 
+  setView(lng = -72.57, lat = 42.34, zoom = 11)
+```
+
+```{r fig.align="center", echo=FALSE}
+# Create first graphic
+basemap %>% 
+  addPolylines(data = pvta_routes_smp, weight = 2, 
+               fillOpacity = 0.7, smoothFactor = 0.5, 
+               color = "navy") %>% 
+  addLabelOnlyMarkers(fivecollege_graph$long, 
+    fivecollege_graph$lat,
+    label = as.character(fivecollege_graph$ReceivingInstitution),
+    labelOptions = labelOptions(noHide = T, textOnly = T, offset = c(0.1,-0.1))) %>% 
+  addMinicharts(
+    fivecollege_graph$long, 
+    fivecollege_graph$lat,
+    type = "pie",
+    chartdata = fivecollege_graph[,6:10],
+    time = fivecollege_graph$Year,
+    colorPalette = fivecollege_graph$color,
+    opacity = 0.75,
+    width = 0.05*(fivecollege_graph$total), height = 0.05*(fivecollege_graph$total)
+  )
+```
+
+
+One could observe from the graphic above that while UMass and Amherst attract the most guest students, students from these two institutions are least prone to leave their campuses for courses. In fact, in the 2016-17 school year, these are the only two institutions with surpluses in incoming guests students: UMass and Amherst respectively received 1158 and 380 more incoming exchange students than out-bounding. On average, only 6.9% of the UMass student body has taken classes off campus between 2012 and 2017. The graphic below shows the amount of registrations for 5-College courses as a percent the total student body. The data collected on 5-College participation only has figures about the number of course registered for, not the number of students taking a class off campus. This explains why Hampshire has over 100% participation, because there are students that take more than one class off campus. The trend is clear: UMass and Smith have the lowest rate of participation in the consortium, relative to their student bodies.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Data Manipulation for second graph
+mithOutgoing <- read.csv(file = "SmithOutgoing.csv", header = TRUE, stringsAsFactors=FALSE)
+SmithIncoming <- read.csv(file = "SmithIncoming.csv", header = TRUE, stringsAsFactors=FALSE)
+FiveCollege <- read.csv(file = "FiveCollege.csv", header = TRUE, stringsAsFactors=FALSE)
+Enrollment <- read.csv(file = "Enrollment.csv", header = TRUE, stringsAsFactors=FALSE)
+
+FiveCollegeTest <- reshape(FiveCollege, varying = c( "Amherst", "Hampshire", "MHC", "Smith", "UMass"),
+                           v.names = "Count",
+                           timevar = "ReceivingInstitution",
+                           times = c( "Amherst", "Hampshire", "MHC", "Smith", "UMass"),
+                           direction = "long")
+FiveCollegeTest <- FiveCollegeTest %>%
+  mutate(Count = as.numeric(as.character(Count)))
+FiveCollegeTest <- na.omit(FiveCollegeTest)
+FiveCollegeTest <- FiveCollegeTest[,-5]
+#write.csv(FiveCollegeTest, file = "FiveCollegeData.csv")
+
+FiveCollegeLine <- FiveCollegeTest %>%
+  group_by( SendingInstitution, Year) %>%
+  summarise( TotalSending = sum(Count))
+
+FiveCollegePop <- merge(FiveCollegeLine, Enrollment, by.x = c("SendingInstitution", "Year"), by.y = c("College", "Year"))
+
+FiveCollegePop <- FiveCollegePop %>%
+  mutate( SendingPercent = round( (TotalSending/Total) * 100, 2 ))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Plot second graph
+g <- ggplot(data = FiveCollegePop, aes(x = Year, y = SendingPercent, group = SendingInstitution)) +
+  geom_line(aes( color = SendingInstitution)) +
+  theme_minimal() +
+  labs(colour = "Five College Institution", title = "Five College Enrollment As Percent of Student Body", x = "School Year, Starting Fall 2013", y = "Five College Enrollment as % of Student Body") 
+
+p <- ggplotly(g)
+p
+```
+
+Five College courses are popular, roughly 50% of graduating Smith students have taken a course off campus, based off of the 5-year graduating class average found by the Consortium. The motivation to take the courses are often because the class is required, but not available at the home institution. In an anonymous interview, a student stated that they took a 5-College course because their, "only option was to take it at another college," and that the computer science courses at UMass are particularly good because they have a "strong computer science department, and offers courses.. that are not covered by the Smith curriculum." Another student stated they took the course because it was, "a topic not offered here at Smith, and the professor got really good reviews." Some students have different motivations, such as wanting "to experience the 5-College experience" or simply because "the food at UMass is great!" 
+
+The different motivations for taking courses off campus mean that the exchange system is mainly driven by specific academic needs and goals for each individual student. On average it would be rare to find more than three students from any of the other Five College institutions sitting in the same classroom. For example, Hampshire has a limited language program outside of Yiddish and ASL, this has lead to a notable amount of students taking various levels of Japanese and Arabic at Amherst particularly for upper levels; by contrast, Smith does not offer any ASL classes, so Smith students will oftentime take ASL classes at Hampshire. 
+
+This need-driven system renders the number of course offerings a major reason why certain campuses attract more incoming students or export more outgoing students: in general, the more classes a campus offers, the more students it attracts and the less frequent its students would take classes off-campus. UMass, for example, offers three to nine times more courses than each of the other institutions on a given year. The figures of Smith and Mt. Holyoke, two women's colleges similar in age and size, also offer validating comparisons. For the 2016-2017 academic year, Smith offered around 300 more courses than Mt. Holyoke, and in turn, Mt. Holyoke students took 300 more off-campus courses compared to that taken by Smith students.
+
+Geographical proximity, however, could be another determining factor. Whether via PVTA or by carpool, exchanges between UMass, Amherst, and Hampshire are generally easier and less time-consuming, a pattern reflected in the exchange numbers. According to Tenzin, a senior at UMass who has taken 7 classes in the Five Colleges, among which 4 were at Amherst and 2 at Smith, while longer commutes did not render the academic experience less rewarding, he did have to take travelling time into account: "You definitely have to plan your academic schedule around the busses and getting to and from each campus with ample time. But I've always had amazing experiences taking classes at the other colleges, so I never have any regrets about that."
+
+For Five College exchanges to and from Smith College, PVTA is crucial for most students who do not own a car. There are three bus routes that connect the Five Colleges, and some commutes are easier than others. The B38 offers quick commute between Mount Holyoke, Hampshire, Amherst and UMass, with less than 20-minute commutes between the latter three colleges; the B39 connects Smith to Hampshire by a 20-minute ride and to Mount Holyoke, but with trips often longer than an hour; the B43 connects Smith College with UMass and Amherst with each ride ranging anywhere between 30 minutes to an hour, depending on traffic conditions. Overall, the time cost of traveling to Smith is much higher for students in other colleges. As a result, Victoria, a sophomore at Mount Holyoke, had to drop one of her classes to accommodate the longer commute accompanying her class at Smith.
+
+As students within the Consortium depends primarily on PVTA for commuting off-campus, PVTA, in turn, also plans a large part of its bus schedule around the needs of Five College students. Although PVTA also serves as the main commuting mechanism for other residents in the Pioneer Valley, rides between the five institutions do constitute the majority of its ridership, as shown in the following graph.
+
+```{r include=FALSE}
+# Third graph data
+B38 <- read_excel("5c-stop.xlsx")
+B39 <- read_excel("B39.xlsx")
+B43 <- read_excel("B43.xlsx")
+```
+
+```{r include=FALSE}
+# Third graphic data cleaning
+fd_B38=filter(B38, stop_name=="Haigis Mall"| stop_name=="Amherst College"| stop_name=="Hampshire Clg"|stop_name=="Carle Museum"| stop_name=="MHC Museum"| stop_name=="Sander's(I)"| stop_name=="Sander's(O)"| stop_name=="Dakin House (O)"| stop_name=="Dakin House (I)"| stop_name=="Blanchard Hall"| stop_name=="Mary Woolley"| stop_name=="Stone Shelter")
+
+fd_B39=filter(B39, stop_name=="Smith College" |stop_name=="Hampshire Clg"|stop_name=="Carle Museum"| stop_name=="MHC Museum"|  stop_name=="Sander's(I)"| stop_name=="Sander's(O)"| stop_name=="Dakin House (O)"| stop_name=="Dakin House (I)"| stop_name=="Blanchard Hall"| stop_name=="Mary Woolley"| stop_name=="Stone Shelter")
+
+fd_B43=filter(B43, stop_name=="Smith College"| stop_name=="Pray St (I)"|stop_name=="Haigis Mall"| stop_name=="Amherst College"| stop_name=="SW/Mass Ave (W)"|  stop_name=="Visitors Ctr")
+
+Busdata <- rbind(fd_B43,fd_B39,fd_B38)
+```
+
+```{r include=FALSE, fig.align="center"}
+# Third graphic -- create seperate parts
+pB38 <- ggplot(data= fd_B38,aes(alight/1000,board/1000,col=stop_name))+geom_jitter()+labs(x= "Exiting (by 1,000)", y= "Boarding (by 1,000)", title= "Busline 38")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+
+pB39<- ggplot(data= fd_B39,aes(alight/1000,board/1000,col=stop_name))+geom_jitter()+labs(x= "Exiting (by 1,000)", y= "Boarding (by 1,000)", title= "Busline 39")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+
+pB43<-ggplot(data= fd_B43,aes(alight/1000,board/1000, col=stop_name))+geom_jitter()+labs(x= "Exiting (by 1,000)", y= "Boarding (by 1,000)", title= "Busline 43")+theme(plot.title= element_text(size=18), panel.background = element_rect(fill= 'white'), panel.grid.major = element_line(colour="grey"),panel.grid.minor = element_line(colour="black"), legend.title = element_text(size = 14))+ scale_color_discrete(name= "Stop Name")
+```
+
+```{r echo=FALSE}
+# Generate the third graph for rider frequency
+grid.arrange(pB43,pB38, arrangeGrob(pB39, ncol=1), heights= c(4/7, 5/7), ncol=2)
+```
+
+The graphs above show the popularity of each stop along the three buslines of interest, B38, B39, B43, which connect the five colleges. The stops that appear as points on the graphs are those with in close affiliation or directly affiliated with one of the Five Colleges. On both the B38 and B39 bus lines Haigis Mall has the heaviest traffic. This is to be expected for two reasons, one the Haigis Mall is front and center for UMass and so a great deal of internal transit occurs from this stop and Umass hosts the majority of Five college students within the Consortium. Another stop to note is the main hampshire college stop. There are two lines that run through Hampshire the B39 and the B38. For the B39 there is a large number of students getting on but very few, comparatively speaking, getting off, while the 38 seems to have fairly equal traffic back and forth. This interesting and tracks with what we know about Hampshire participation in the five college network; however it is important to look at the data under a critical eye. Hampshire could hardly call itself walking distance from anything, and so students are more likely to use the buses for things like going into town or shopping. Over all the Buslines are fairly representative of the distribution of students that are attending classes across the institutions.
+
+Memories of the commute are often not as fond as the memories of the class time. Students recall the long rides on the PVTA, stating that in the morning, the rides weren't too terrible, but "the afternoon bus back to Smith, however, can take almost an hour, depending on the traffic." A theme of the commute time is that it becomes a centerpiece of the entire day. A Smith student stated that "[she] absolutely needs to plan my schedule around the UMass class because of the commute." Another student states, "You definitely have to plan your academic schedule around the busses and getting to and from each campus with ample time." The commute between colleges can take up to two hours a day, round trip. In the typical class schedule window of 9am to 5pm, it is easy to see why the commute structures the rest of the schedule. Which came first in the decision to take a course: the commute or the class?
+
+It is particularly difficult to get to Smith. A student recalls that while the commute from UMass to Smith is "tolerable" it is "far longer/more painful compared to the commute to other colleges." The commute is directly tied to the structure of PVTA bus routes, and some changes in route have lasting effects on students taking 5-college course. One student recalls that they wish "they still had the M40 direct bus to Smith, but they axed it this year." These narratives reiterate the movements and trends shown in the graphics above. The commute between Smith and the other 4-colleges is often more difficult, likely the reason why fewer individuals are taking classes at Smith and fewer are leaving Smith to take classes elsewhere. 
+
+This work dove into the numbers behind the trends we see. There is lower participation both to and from Smith, likely due to the difficulty of moving between colleges, which students often remember as a major part of their academic schedule. It seems reasonable to conclude the 5-College experience as a Smith student would be far more different if Smith was located on the east side of the Connecticut River. Perhaps before Smith finishes building a New Neilson, we think about moving ourselves closer to the 5-College buzz. 
